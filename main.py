@@ -1,14 +1,13 @@
-from lexer import *
+from lex import *
+from parse import *
 
 def main():
     with open("test.tcc") as fd:
         source = fd.read()
 
     lexer = Lexer(source)
-    token = lexer.getToken()
-    while token.kind is not TokenType.EOF:
-        print(f"{token.kind} : {token.text}")
-        token = lexer.getToken()
+    parser = Parser(lexer)
+    parser.program()
 
 if __name__ == "__main__":
     main()
