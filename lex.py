@@ -45,6 +45,7 @@ class Lexer:
         self.source = source + '\n'
         self.current_char = ''
         self.current_pos = -1
+        # Initialize current char and pos
         self.nextChar()
 
     def nextChar(self, n = 1) -> str:
