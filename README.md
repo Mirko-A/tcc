@@ -1,18 +1,18 @@
-# tcc
+# Description
 A compiler for a BASIC-like language written in Python
 
 # Grammar
-program ::= {statement}
-statement ::= "PRINT" (expression | string) nl
-    | "IF" comparison "THEN" nl {statement} "ENDIF" nl
-    | "WHILE" comparison "REPEAT" nl {statement} "ENDWHILE" nl
-    | "LABEL" ident nl
-    | "GOTO" ident nl
-    | "LET" ident "=" expression nl
-    | "INPUT" ident nl
-comparison ::= expression (("==" | "!=" | ">" | ">=" | "<" | "<=") expression)+
-expression ::= term {( "-" | "+" ) term}
-term ::= unary {( "/" | "*" ) unary}
-unary ::= ["+" | "-"] primary
-primary ::= number | ident
-nl ::= '\n'+
+program ::= {statement}\n
+statement ::= "PRINT" (expression | string) nl\n
+    | "IF" comparison "THEN" nl {statement} "ENDIF" nl\n
+    | "WHILE" comparison "REPEAT" nl {statement} "ENDWHILE" nl\n
+    | "LABEL" ident nl\n
+    | "GOTO" ident nl\n
+    | "LET" ident "=" expression nl\n
+    | "INPUT" ident nl\n
+comparison ::= expression (("==" | "!=" | ">" | ">=" | "<" | "<=") expression)+\n
+expression ::= term {( "-" | "+" ) term}\n
+term ::= unary {( "/" | "*" ) unary}\n
+unary ::= ["+" | "-"] primary\n
+primary ::= number | ident\n
+nl ::= '\n'+\n
