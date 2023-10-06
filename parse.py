@@ -18,6 +18,9 @@ class Parser:
     def program(self):
         print("PROGRAM")
 
+        while self.currentTokenIsKind(TokenType.NEWLINE):
+            self.nextToken()
+
         # Parse all the statements in the program.
         while not self.currentTokenIsKind(TokenType.EOF):
             self.statement()
