@@ -1,5 +1,5 @@
 # Description
-A compiler for a BASIC-like language written in Python
+A compiler for a BASIC-like language written in Python.
 
 # Grammar
 
@@ -18,4 +18,10 @@ term ::= unary {( "/" | "*" ) unary}
 unary ::= ["+" | "-"] primary
 primary ::= number | ident
 nl ::= '\n'+
+```
+
+# Usage
+
+```Console
+./tcc input_file.tcc output_file
 ```
