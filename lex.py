@@ -158,7 +158,7 @@ class Lexer:
         while next_char.isalnum() or next_char == '_':
             text += next_char
 
-            if text in KEYWORDS.keys() and self.peek() == ' ':
+            if text in KEYWORDS.keys() and (self.peek() == ' ' or self.peek() == '\n'):
                 self.nextChar()
                 return Token(text, KEYWORDS[text])
             
