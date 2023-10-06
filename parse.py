@@ -6,6 +6,10 @@ class Parser:
     def __init__(self, lexer: Lexer):
         self.lexer = lexer
 
+        self.symbols = set()    # Variables declared so far.
+        self.labels_declared = set() # Labels declared so far.
+        self.labels_gotoed = set() # Labels goto'ed so far.
+
         self.current_token: Token | None = None
         self.peek_token: Token | None = None
         # Call this twice to initialize current and peek token
@@ -24,6 +28,10 @@ class Parser:
         # Parse all the statements in the program.
         while not self.currentTokenIsKind(TokenType.EOF):
             self.statement()
+
+        for label in self.labels_gotoed:
+            if label not in self.labels_declared:
+                self.abort(f"Attempting to GOTO to an undeclared label: {label}")
 
         print("Parsing complete.")
 
@@ -75,6 +83,10 @@ class Parser:
             print("STATEMENT-LABEL")
             self.nextToken()
 
+            if self.current_token.text in self.labels_declared:
+                self.abort(f"Label already exists: {self.current_token.text}")
+            self.labels_declared.add(self.current_token.text)
+
             # Require IDENTIFIER token afterwards
             self.matchCurrentTokenKind(TokenType.IDENTIFIER)
             # Handle the identifier
@@ -83,6 +95,8 @@ class Parser:
             # "GOTO" ident nl
             print("STATEMENT-GOTO")
             self.nextToken()
+
+            self.labels_gotoed.add(self.current_token.text)
 
             # Require IDENTIFIER token afterwards
             self.matchCurrentTokenKind(TokenType.IDENTIFIER)
@@ -93,19 +107,29 @@ class Parser:
             print("STATEMENT-LET")
             self.nextToken()
 
+            # Check if identifier exists in symbol table.
+            # If not, declare it.
+            if self.current_token.text not in self.symbols:
+                self.symbols.add(self.current_token.text)
+
             # Require IDENTIFIER token afterwards
             self.matchCurrentTokenKind(TokenType.IDENTIFIER)
             # Require EQ token afterwards
             self.matchCurrentTokenKind(TokenType.EQ)
             # Handle the expression
             self.expression()
+
         elif self.currentTokenIsKind(TokenType.INPUT):
             # "INPUT" ident nl
             print("STATEMENT-INPUT")
             self.nextToken()
 
-            # Require INPUT token afterwards
-            self.matchCurrentTokenKind(TokenType.INPUT)
+            #If variable doesn't already exist, declare it.
+            if self.current_token.text not in self.symbols:
+                self.symbols.add(self.current_token.text)
+
+            # Require IDENTIFIER token afterwards
+            self.matchCurrentTokenKind(TokenType.IDENTIFIER)
             # Handle the input
             self.input()
         else:
@@ -114,10 +138,75 @@ class Parser:
         # Require NEWLINE token after every statement
         self.nl()
 
-    def expression(self):
-        pass
-
     def comparison(self):
+        # comparison ::= expression (("==" | "!=" | ">" | ">=" | "<" | "<=") expression)+
+        print("COMPARISON")
+
+        self.expression()
+        # Must be at least one comparison operator and another expression.
+        if self.isComparisonOperator():
+            self.nextToken()
+            self.expression()
+        else:
+            self.abort(f"Expected comparison operator at: {self.current_token.text}")
+
+        # Can have 0 or more additional comparison operator and expressions.
+        while self.isComparisonOperator():
+            self.nextToken()
+            self.expression()
+
+    def isComparisonOperator(self) -> bool:
+        if (self.currentTokenIsKind(TokenType.EQ)     or 
+            self.currentTokenIsKind(TokenType.NOTEQ)  or 
+            self.currentTokenIsKind(TokenType.GT)     or 
+            self.currentTokenIsKind(TokenType.GTEQ)   or 
+            self.currentTokenIsKind(TokenType.LT)     or 
+            self.currentTokenIsKind(TokenType.LTEQ)):
+            return True
+        else:
+            return False
+
+    def expression(self):
+        # expression ::= term {( "+" | "-" ) term}
+        print("EXPRESSION")
+
+        self.term()
+        while self.currentTokenIsKind(TokenType.PLUS) or self.currentTokenIsKind(TokenType.MINUS):
+            self.nextToken()
+            self.term()
+
+    def term(self):
+        # term ::= unary {( "/" | "*" ) unary}
+        print("TERM")
+
+        self.unary()
+        if self.currentTokenIsKind(TokenType.SLASH) or self.currentTokenIsKind(TokenType.ASTERISK):
+            self.nextToken()
+            self.unary()
+
+    def unary(self):
+        # unary ::= ["+" | "-"] primary
+        print("UNARY")
+
+        if self.currentTokenIsKind(TokenType.PLUS) or self.currentTokenIsKind(TokenType.MINUS):
+            self.nextToken()
+        self.primary()
+
+    def primary(self):
+        # primary ::= number | ident
+        print(f"PRIMARY ({self.current_token.text})")
+
+        if self.currentTokenIsKind(TokenType.NUMBER):
+            self.nextToken()
+        elif self.currentTokenIsKind(TokenType.IDENTIFIER):
+            # Ensure the variable already exists.
+            if self.current_token.text not in self.symbols:
+                self.abort(f"Referencing variable before declaration: {self.current_token.text}")
+            self.nextToken()
+        else:
+            self.abort(f"Expected NUMBER or IDENTIFIER token but got {self.current_token.kind.name}")
+
+    def number(self):
         pass
 
     def identifier(self):
