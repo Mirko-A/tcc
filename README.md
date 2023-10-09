@@ -23,5 +23,5 @@ nl ::= '\n'+
 # Usage
 
 ```Console
-./tcc input_file.tcc output_file
+python ./tcc.py input_file output_file
 ```
