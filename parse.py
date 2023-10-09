@@ -1,6 +1,19 @@
-import sys
 from lex import *
 from emit import *
+
+from enum import Enum
+import sys
+
+class ExitCode(Enum):
+    # OK
+    OK = 0
+    # Usage errors
+    USAGE_ERROR_NOT_ENOUGH_ARGS = 1
+    USAGE_TOO_MANY_ARGS = 2
+    # Compile errors
+
+    # Runtime errors
+    RUNTIME_ERROR_INVALID_INPUT = 20
 
 # Parser object keeps track of current token and checks if the code matches the grammar
 class Parser:
@@ -40,9 +53,8 @@ class Parser:
             if label not in self.labels_declared:
                 self.abort(f"Attempting to GOTO to an undeclared label: {label}")
 
-        self.emitter.header_add_line("return 0;")
-        self.emitter.header_add_line("}")
-        self.emitter.header_add_line("")
+        self.emitter.code_add_line(f"return {ExitCode.OK.value};")
+        self.emitter.code_add_line("}")
 
     # One of the following statements...
     def statement(self):
@@ -50,51 +62,60 @@ class Parser:
 
         if self.currentTokenIsKind(TokenType.PRINT):
             # statement ::= "PRINT" (expression | string) nl
-            print("STATEMENT-PRINT")
             self.nextToken()
 
             if self.currentTokenIsKind(TokenType.STRING):
                 # Simple string.
+                self.emitter.code_add_line(f"printf(\"{self.current_token.text}\\n\");")
                 self.nextToken()
             else:
                 # Expect an expression.
+                self.emitter.code_add(f"printf(\"%.2f\\n\", (float)(")
                 self.expression()
+                self.emitter.code_add_line("));")
         elif self.currentTokenIsKind(TokenType.IF):
             # "IF" comparison "THEN" nl {statement} "ENDIF" nl
-            print("STATEMENT-IF")
+            self.emitter.code_add("if(")
             self.nextToken()
 
             # Handle the comparison
             self.comparison()
+            self.emitter.code_add_line(")")
             # Require THEN token afterwards
             self.matchCurrentTokenKind(TokenType.THEN)
             # Require NEWLINE token afterwards
             self.nl()
+            self.emitter.code_add_line("{")
             self.processStatementsUntil(TokenType.ENDIF)
             # Require ENDIF token afterwards
             self.matchCurrentTokenKind(TokenType.ENDIF)
+            self.emitter.code_add_line("}")
         elif self.currentTokenIsKind(TokenType.WHILE):
             # "WHILE" comparison "REPEAT" nl {statement nl} "ENDWHILE" nl
-            print("STATEMENT-WHILE")
+            self.emitter.code_add("while(")
             self.nextToken()
 
             # Handle the comparison
             self.comparison()
+            self.emitter.code_add_line(")")
             # Require REPEAT token afterwards
             self.matchCurrentTokenKind(TokenType.REPEAT)
             # Require NEWLINE token afterwards
             self.nl()
+            self.emitter.code_add_line("{")
             self.processStatementsUntil(TokenType.ENDWHILE)
             # Require ENDWHILE token afterwards
             self.matchCurrentTokenKind(TokenType.ENDWHILE)
+            self.emitter.code_add_line("}")
         elif self.currentTokenIsKind(TokenType.LABEL):
             # "LABEL" ident nl
-            print("STATEMENT-LABEL")
             self.nextToken()
 
             if self.current_token.text in self.labels_declared:
                 self.abort(f"Label already exists: {self.current_token.text}")
             self.labels_declared.add(self.current_token.text)
+
+            self.emitter.code_add_line(f"{self.current_token.text}:")
 
             # Require IDENTIFIER token afterwards
             self.matchCurrentTokenKind(TokenType.IDENTIFIER)
@@ -107,53 +128,60 @@ class Parser:
 
             self.labels_gotoed.add(self.current_token.text)
 
+            self.emitter.code_add_line(f"goto {self.current_token.text};")
+
             # Require IDENTIFIER token afterwards
             self.matchCurrentTokenKind(TokenType.IDENTIFIER)
-            # Handle the goto
-            self.goto()
         elif self.currentTokenIsKind(TokenType.LET):
             # "LET" ident "=" expression nl
-            print("STATEMENT-LET")
             self.nextToken()
 
             # Check if identifier exists in symbol table.
             # If not, declare it.
             if self.current_token.text not in self.symbols:
+                self.emitter.header_add_line(f"float {self.current_token.text};")
                 self.symbols.add(self.current_token.text)
+
+            self.emitter.code_add(f"{self.current_token.text}")
 
             # Require IDENTIFIER token afterwards
             self.matchCurrentTokenKind(TokenType.IDENTIFIER)
             # Require EQ token afterwards
+            self.emitter.code_add(" = ")
             self.matchCurrentTokenKind(TokenType.EQ)
             # Handle the expression
             self.expression()
+            self.emitter.code_add_line(";")
 
         elif self.currentTokenIsKind(TokenType.INPUT):
             # "INPUT" ident nl
-            print("STATEMENT-INPUT")
             self.nextToken()
 
             #If variable doesn't already exist, declare it.
             if self.current_token.text not in self.symbols:
+                self.emitter.header_add_line(f"float {self.current_token.text};")
                 self.symbols.add(self.current_token.text)
+
+            self.emitter.code_add_line(f"if(scanf(\"%f\", &{self.current_token.text}) == 0)")
+            self.emitter.code_add_line("{")
+            self.emitter.code_add_line("printf(\"Runtime error. Only floating point numbers are accepted as input.\\n\");")
+            self.emitter.code_add_line(f"return {ExitCode.RUNTIME_ERROR_INVALID_INPUT.value};")
+            self.emitter.code_add_line("}")
 
             # Require IDENTIFIER token afterwards
             self.matchCurrentTokenKind(TokenType.IDENTIFIER)
-            # Handle the input
-            self.input()
         else:
             self.abort(f"Invalid statement at {self.current_token.text} ({self.current_token.kind.name})")
 
         # Require NEWLINE token after every statement
         self.nl()
 
+    # comparison ::= expression (("==" | "!=" | ">" | ">=" | "<" | "<=") expression)+
     def comparison(self):
-        # comparison ::= expression (("==" | "!=" | ">" | ">=" | "<" | "<=") expression)+
-        print("COMPARISON")
-
         self.expression()
         # Must be at least one comparison operator and another expression.
         if self.isComparisonOperator():
+            self.emitter.code_add(f" {self.current_token.text} ")
             self.nextToken()
             self.expression()
         else:
@@ -161,6 +189,7 @@ class Parser:
 
         # Can have 0 or more additional comparison operator and expressions.
         while self.isComparisonOperator():
+            self.emitter.code_add(f" {self.current_token.text} ")
             self.nextToken()
             self.expression()
 
@@ -175,57 +204,43 @@ class Parser:
         else:
             return False
 
+    # expression ::= term {( "+" | "-" ) term}
     def expression(self):
-        # expression ::= term {( "+" | "-" ) term}
-        print("EXPRESSION")
-
         self.term()
         while self.currentTokenIsKind(TokenType.PLUS) or self.currentTokenIsKind(TokenType.MINUS):
+            self.emitter.code_add(self.current_token.text)
             self.nextToken()
             self.term()
 
+    # term ::= unary {( "/" | "*" ) unary}
     def term(self):
-        # term ::= unary {( "/" | "*" ) unary}
-        print("TERM")
-
         self.unary()
         if self.currentTokenIsKind(TokenType.SLASH) or self.currentTokenIsKind(TokenType.ASTERISK):
+            self.emitter.code_add(self.current_token.text)
             self.nextToken()
             self.unary()
 
+    # unary ::= ["+" | "-"] primary
     def unary(self):
-        # unary ::= ["+" | "-"] primary
-        print("UNARY")
-
         if self.currentTokenIsKind(TokenType.PLUS) or self.currentTokenIsKind(TokenType.MINUS):
+            self.emitter.code_add(self.current_token.text)
             self.nextToken()
         self.primary()
 
+    # primary ::= number | ident
     def primary(self):
-        # primary ::= number | ident
-        print(f"PRIMARY ({self.current_token.text})")
-
         if self.currentTokenIsKind(TokenType.NUMBER):
+            self.emitter.code_add(self.current_token.text)
             self.nextToken()
         elif self.currentTokenIsKind(TokenType.IDENTIFIER):
             # Ensure the variable already exists.
             if self.current_token.text not in self.symbols:
                 self.abort(f"Referencing variable before declaration: {self.current_token.text}")
+            
+            self.emitter.code_add(self.current_token.text)
             self.nextToken()
         else:
             self.abort(f"Expected NUMBER or IDENTIFIER token but got {self.current_token.kind.name}")
-
-    def number(self):
-        pass
-
-    def identifier(self):
-        pass
-    
-    def input(self):
-        pass
-
-    def goto(self):
-        pass
 
     # Zero or more statements in the body
     def processStatementsUntil(self, end_token: TokenType):
@@ -235,7 +250,6 @@ class Parser:
             self.statement()
 
     def nl(self):
-        print("NEWLINE")
         # Require at least one newline character
         self.matchCurrentTokenKind(TokenType.NEWLINE)
 
@@ -252,12 +266,13 @@ class Parser:
     # Try to match current token. If not, error. Advances the current token.
     def matchCurrentTokenKind(self, kind: TokenType):  
         if not self.currentTokenIsKind(kind):
-            self.abort("Expected " + kind.name + ", got " + self.current_token.kind.name)
+            self.abort(f"Expected {kind.name}, got {self.current_token.kind.name}")
         self.nextToken()
 
     def nextToken(self):
         self.current_token = self.peek_token
         self.peek_token = self.lexer.getToken()
 
-    def abort(self, message):
-        sys.exit("Error. " + message)
+    def abort(self, message: str):
+        print("Error. " + message)
+        sys.exit()

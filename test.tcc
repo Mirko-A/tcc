@@ -3,6 +3,11 @@ INPUT nums
 PRINT ""
 
 LET a = 0
+
+IF a > 0 THEN
+    PRINT "True"
+ENDIF
+
 LET b = 1
 WHILE nums > 0 REPEAT
     PRINT a

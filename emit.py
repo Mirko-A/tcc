@@ -1,11 +1,11 @@
 class Emitter:
-    def __init__(self, out_file_path: str = "out.c"):
+    def __init__(self, out_file_path):
         self.out_file_path = out_file_path
         self.header = ""
         self.code = ""
 
     def code_add(self, code: str):
-        code += code
+        self.code += code
         
     def code_add_line(self, code: str):
         self.code += code + '\n'
