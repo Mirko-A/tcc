@@ -1,10 +1,14 @@
 import sys
 from lex import *
+from emit import *
 
 # Parser object keeps track of current token and checks if the code matches the grammar
 class Parser:
-    def __init__(self, lexer: Lexer):
+    def __init__(self, lexer: Lexer, emitter: Emitter):
         self.lexer = lexer
+        self.emitter = emitter
+
+        self.code = "" # Output of the parser is kept here
 
         self.symbols = set()    # Variables declared so far.
         self.labels_declared = set() # Labels declared so far.
@@ -20,8 +24,11 @@ class Parser:
 
     # program ::= {statement}
     def program(self):
-        print("PROGRAM")
+        self.emitter.header_add_line("#include <stdio.h>")
+        self.emitter.header_add_line("int main(void)")
+        self.emitter.header_add_line("{")
 
+        # Allow spaces at the start of the program
         while self.currentTokenIsKind(TokenType.NEWLINE):
             self.nextToken()
 
@@ -33,7 +40,9 @@ class Parser:
             if label not in self.labels_declared:
                 self.abort(f"Attempting to GOTO to an undeclared label: {label}")
 
-        print("Parsing complete.")
+        self.emitter.header_add_line("return 0;")
+        self.emitter.header_add_line("}")
+        self.emitter.header_add_line("")
 
     # One of the following statements...
     def statement(self):
